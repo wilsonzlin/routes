@@ -76,11 +76,14 @@ export class Route<Value, Parsed extends { [name: string]: any }> {
     this.value = valFn;
   }
 
-  private _parse(parsed: any, components: string[]): Value | undefined {
+  private _parse(
+    parsed: any,
+    components: string[]
+  ): [Value, Parsed] | undefined {
     let comp;
     if ((comp = components.shift()) === undefined) {
       // We have reached end of path.
-      return this.value?.(parsed);
+      return this.value && ([this.value, parsed] as any);
     }
     const litChild = this.literalChildren.get(comp);
     if (litChild) {
@@ -119,7 +122,9 @@ export class Route<Value, Parsed extends { [name: string]: any }> {
     return undefined;
   }
 
-  parse(path: string[]): Value | undefined {
+  // We return a pair instead of simply calling Value(Parsed) and returning the result
+  // in case the user wants to do something different e.g. React.createElement(Value, Parsed).
+  parse(path: string[]): [Value, Parsed] | undefined {
     const parsed = Object.create(null);
     return this._parse(parsed, path.slice());
   }
