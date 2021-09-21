@@ -24,4 +24,5 @@ test("parsing works correctly", () => {
   expect(router.parse(["user", "un", "a"])?.[1]).toEqual({ username: "un" });
   expect(router.parse(["user", "un", "b"])?.[1]).toEqual({ usernameB: "un" });
   expect(router.parse(["user", "un", "c"])?.[1]).toEqual({ path: ["un", "c"] });
+  expect(router.parse(["user"])?.[1]).toEqual({ path: [] });
 });

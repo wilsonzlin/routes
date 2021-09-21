@@ -103,48 +103,15 @@ export class Route<Value, Parsed extends { [name: string]: any }> {
     const comp = components[componentStartIndex];
     if (comp === undefined) {
       // We have reached end of path.
-      return this.value;
-    }
-    const litChild = this.literalChildren.get(comp);
-    if (litChild) {
-      const lenBefore = parsedEntries.length;
-      const res = litChild._parse(
-        parsedEntries,
-        components,
-        componentStartIndex + 1
-      );
-      if (res != undefined) {
-        return res;
+      // NOTE: We could still match catchAllChild, so don't return here always.
+      if (this.value) {
+        return this.value;
       }
-      parsedEntries.splice(lenBefore);
-    }
-
-    for (const {
-      name,
-      parser,
-      prefix,
-      subroute,
-    } of this.lazyParamChildrenMap.map(this.paramChildren, (children) =>
-      children
-        .slice()
-        .sort(
-          multiComparator(
-            reversedComparator(derivedComparator((e) => e.prefix.length)),
-            propertyComparator("name")
-          )
-        )
-    )) {
-      if (!comp.startsWith(prefix)) {
-        continue;
-      }
-      const raw = comp.slice(prefix.length);
-
-      // This is a parameterised component.
-      const v = parser(raw);
-      if (v !== undefined) {
+    } else {
+      const litChild = this.literalChildren.get(comp);
+      if (litChild) {
         const lenBefore = parsedEntries.length;
-        parsedEntries.push([name, v]);
-        const res = subroute._parse(
+        const res = litChild._parse(
           parsedEntries,
           components,
           componentStartIndex + 1
@@ -153,6 +120,43 @@ export class Route<Value, Parsed extends { [name: string]: any }> {
           return res;
         }
         parsedEntries.splice(lenBefore);
+      }
+
+      for (const {
+        name,
+        parser,
+        prefix,
+        subroute,
+      } of this.lazyParamChildrenMap.map(this.paramChildren, (children) =>
+        children
+          .slice()
+          .sort(
+            multiComparator(
+              reversedComparator(derivedComparator((e) => e.prefix.length)),
+              propertyComparator("name")
+            )
+          )
+      )) {
+        if (!comp.startsWith(prefix)) {
+          continue;
+        }
+        const raw = comp.slice(prefix.length);
+
+        // This is a parameterised component.
+        const v = parser(raw);
+        if (v !== undefined) {
+          const lenBefore = parsedEntries.length;
+          parsedEntries.push([name, v]);
+          const res = subroute._parse(
+            parsedEntries,
+            components,
+            componentStartIndex + 1
+          );
+          if (res != undefined) {
+            return res;
+          }
+          parsedEntries.splice(lenBefore);
+        }
       }
     }
 
