@@ -1,5 +1,6 @@
 import derivedComparator from "@xtjs/lib/js/derivedComparator";
 import Dict from "@xtjs/lib/js/Dict";
+import mapDefined from "@xtjs/lib/js/mapDefined";
 import lazyMap from "@xtjs/lib/js/lazyMap";
 import multiComparator from "@xtjs/lib/js/multiComparator";
 import propertyComparator from "@xtjs/lib/js/propertyComparator";
@@ -20,6 +21,9 @@ export class Route<Value, Parsed extends { [name: string]: any }> {
     (a, b) => a.length === b.length
   );
   private readonly literalChildren = new Dict<string, Route<any, any>>();
+  private catchAllChild:
+    | { paramName: string; value: (parsed: Parsed) => Value }
+    | undefined;
 
   private constructor() {}
 
@@ -69,6 +73,21 @@ export class Route<Value, Parsed extends { [name: string]: any }> {
     return this.addParamChild(prefix, name, parser);
   }
 
+  catchAll<N extends string>(
+    paramName: N,
+    valFn: (
+      parsed: Parsed &
+        {
+          [name in N]: string[];
+        }
+    ) => Value
+  ): void {
+    if (this.catchAllChild) {
+      throw new ReferenceError(`Catch-all already set`);
+    }
+    this.catchAllChild = { paramName, value: valFn };
+  }
+
   end(valFn: (parsed: Parsed) => Value): void {
     if (this.value) {
       throw new ReferenceError(`End already set`);
@@ -77,17 +96,27 @@ export class Route<Value, Parsed extends { [name: string]: any }> {
   }
 
   private _parse(
-    parsed: any,
-    components: string[]
-  ): [(parsed: Parsed) => Value, Parsed] | undefined {
-    let comp;
-    if ((comp = components.shift()) === undefined) {
+    parsedEntries: [string, any][],
+    components: readonly string[],
+    componentStartIndex: number
+  ): ((parsed: Parsed) => Value) | undefined {
+    const comp = components[componentStartIndex];
+    if (comp === undefined) {
       // We have reached end of path.
-      return this.value && [this.value, parsed];
+      return this.value;
     }
     const litChild = this.literalChildren.get(comp);
     if (litChild) {
-      return litChild._parse(parsed, components);
+      const lenBefore = parsedEntries.length;
+      const res = litChild._parse(
+        parsedEntries,
+        components,
+        componentStartIndex + 1
+      );
+      if (res != undefined) {
+        return res;
+      }
+      parsedEntries.splice(lenBefore);
     }
 
     for (const {
@@ -113,9 +142,26 @@ export class Route<Value, Parsed extends { [name: string]: any }> {
       // This is a parameterised component.
       const v = parser(raw);
       if (v !== undefined) {
-        parsed[name] = v;
-        return subroute._parse(parsed, components);
+        const lenBefore = parsedEntries.length;
+        parsedEntries.push([name, v]);
+        const res = subroute._parse(
+          parsedEntries,
+          components,
+          componentStartIndex + 1
+        );
+        if (res != undefined) {
+          return res;
+        }
+        parsedEntries.splice(lenBefore);
       }
+    }
+
+    if (this.catchAllChild) {
+      parsedEntries.push([
+        this.catchAllChild.paramName,
+        components.slice(componentStartIndex),
+      ]);
+      return this.catchAllChild.value;
     }
 
     // If we've reached here, we couldn't find any matching route.
@@ -125,7 +171,11 @@ export class Route<Value, Parsed extends { [name: string]: any }> {
   // We return a pair instead of simply calling Value(Parsed) and returning the result
   // in case the user wants to do something different e.g. React.createElement(Value, Parsed).
   parse(path: string[]): [(parsed: Parsed) => Value, Parsed] | undefined {
-    const parsed = Object.create(null);
-    return this._parse(parsed, path.slice());
+    const parsedEntries: [string, any][] = [];
+    const res = this._parse(parsedEntries, path, 0);
+    return mapDefined(res, (fn) => [
+      fn,
+      Object.fromEntries(parsedEntries) as Parsed,
+    ]);
   }
 }

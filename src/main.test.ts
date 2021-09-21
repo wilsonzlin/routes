@@ -8,8 +8,20 @@ test("parsing works correctly", () => {
   userRouter
     .prefixedParam("userAlias", "@", String)
     .end((parsed) => parsed.userAlias);
+  userRouter
+    .param("username", String)
+    .lit("a")
+    .end((parsed) => parsed.username);
+  userRouter
+    .param("usernameB", String)
+    .lit("b")
+    .end((parsed) => parsed.usernameB);
   userRouter.param("username", String).end((parsed) => parsed.username);
+  userRouter.catchAll("path", (parsed) => parsed.path);
   expect(router.parse(["user", "10"])?.[1]).toEqual({ userId: 10 });
   expect(router.parse(["user", "@twtr"])?.[1]).toEqual({ userAlias: "twtr" });
   expect(router.parse(["user", "un"])?.[1]).toEqual({ username: "un" });
+  expect(router.parse(["user", "un", "a"])?.[1]).toEqual({ username: "un" });
+  expect(router.parse(["user", "un", "b"])?.[1]).toEqual({ usernameB: "un" });
+  expect(router.parse(["user", "un", "c"])?.[1]).toEqual({ path: ["un", "c"] });
 });
